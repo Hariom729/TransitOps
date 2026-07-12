@@ -4,6 +4,10 @@ import Card from '../../components/ui/Card.astro';
 import Button from '../../components/ui/Button.astro';
 import { db } from '../../db';
 import { fuelLogs, maintenanceLogs, vehicles, trips, expenses } from '../../db/schema';
+import { canView, getRedirectPath } from '../../utils/auth';
+
+const role = Astro.cookies.get('user_role')?.value;
+if (!canView(role, 'analytics')) return Astro.redirect(getRedirectPath(role));
 
 const allFuelLogs = db.select().from(fuelLogs).all();
 const allMaintenanceLogs = db.select().from(maintenanceLogs).all();

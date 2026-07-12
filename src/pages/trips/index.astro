@@ -5,8 +5,12 @@ import Button from '../../components/ui/Button.astro';
 import Badge from '../../components/ui/Badge.astro';
 import Input from '../../components/ui/Input.astro';
 import { db } from '../../db';
-import { trips, vehicles, drivers, fuelLogs } from '../../db/schema';
 import { eq } from 'drizzle-orm';
+import { canView, canEdit, getRedirectPath } from '../../utils/auth';
+
+const role = Astro.cookies.get('user_role')?.value;
+if (!canView(role, 'trips')) return Astro.redirect(getRedirectPath(role));
+const isEditable = canEdit(role, 'trips');
 
 const allVehicles = db.select().from(vehicles).all();
 const allDrivers = db.select().from(drivers).all();
@@ -17,6 +21,7 @@ const availableDrivers = allDrivers.filter(d => d.status === 'Available' && new 
 let errorMessage = '';
 
 if (Astro.request.method === 'POST') {
+  if (!isEditable) return Astro.redirect(getRedirectPath(role));
   const formData = await Astro.request.formData();
   const action = formData.get('action');
 
@@ -145,8 +150,9 @@ const allTrips = db.select().from(trips).all();
           </div>
         </div>
 
-        <Card variant="marketing" class="sticky top-24">
-          <h2 class="text-display-md text-ink mb-md">Create Trip</h2>
+        {isEditable && (
+          <Card variant="marketing" class="sticky top-24 mt-xl">
+            <h2 class="text-display-md text-ink mb-md">Create Trip</h2>
           <form method="post" class="space-y-md">
             <input type="hidden" name="action" value="create" />
             <Input name="source" label="Source location" placeholder="Warehouse A" required />
@@ -180,6 +186,7 @@ const allTrips = db.select().from(trips).all();
             <Button type="submit" variant="primary" class="w-full mt-sm" disabled={availableVehicles.length === 0 || availableDrivers.length === 0}>Create Draft</Button>
           </form>
         </Card>
+        )}
       </div>
 
       <div class="lg:col-span-2 space-y-md">
@@ -213,25 +220,28 @@ const allTrips = db.select().from(trips).all();
                         {t.status === 'Draft' ? 'Awaiting dispatch' : t.status === 'Dispatched' ? `${t.plannedDistance} km` : t.status === 'Completed' ? 'Trip finished' : 'Cancelled'}
                       </div>
                     </div>
+                    </div>
                   </div>
-                  <div class="flex gap-2 justify-end pt-2 border-t border-hairline mt-2">
-                    {t.status === 'Draft' && (
-                      <form method="post" class="flex gap-2">
-                        <input type="hidden" name="tripId" value={t.id} />
-                        <Button type="submit" name="action" value="dispatch" variant="primary" size="sm">Dispatch</Button>
-                        <Button type="submit" name="action" value="cancel" variant="secondary" size="sm">Cancel</Button>
-                      </form>
-                    )}
-                    {t.status === 'Dispatched' && (
-                      <div class="flex gap-2">
-                        <Button type="button" variant="primary" size="sm" class="bg-success text-white hover:bg-success/90 border-transparent" onclick={`openCompleteModal('${t.id}', '${v?.odometer || 0}')`}>Complete</Button>
-                        <form method="post">
+                  {isEditable && (
+                    <div class="flex gap-2 justify-end pt-2 border-t border-hairline mt-2">
+                      {t.status === 'Draft' && (
+                        <form method="post" class="flex gap-2">
                           <input type="hidden" name="tripId" value={t.id} />
+                          <Button type="submit" name="action" value="dispatch" variant="primary" size="sm">Dispatch</Button>
                           <Button type="submit" name="action" value="cancel" variant="secondary" size="sm">Cancel</Button>
                         </form>
-                      </div>
-                    )}
-                  </div>
+                      )}
+                      {t.status === 'Dispatched' && (
+                        <div class="flex gap-2">
+                          <Button type="button" variant="primary" size="sm" class="bg-success text-white hover:bg-success/90 border-transparent" onclick={`openCompleteModal('${t.id}', '${v?.odometer || 0}')`}>Complete</Button>
+                          <form method="post">
+                            <input type="hidden" name="tripId" value={t.id} />
+                            <Button type="submit" name="action" value="cancel" variant="secondary" size="sm">Cancel</Button>
+                          </form>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </Card>
                );
             })}
@@ -240,8 +250,9 @@ const allTrips = db.select().from(trips).all();
       </div>
     </div>
 
-    <dialog id="completeTripModal" class="p-0 bg-transparent backdrop:bg-primary/20 backdrop:backdrop-blur-sm rounded-lg shadow-level-4">
-      <Card variant="marketing" class="w-[400px] m-auto max-w-[90vw]">
+    {isEditable && (
+      <dialog id="completeTripModal" class="p-0 bg-transparent backdrop:bg-primary/20 backdrop:backdrop-blur-sm rounded-lg shadow-level-4">
+        <Card variant="marketing" class="w-[400px] m-auto max-w-[90vw]">
         <div class="flex justify-between items-center mb-md">
           <h2 class="text-display-md text-ink">Complete Trip</h2>
           <button id="closeCompleteModalBtn" type="button" class="text-body hover:text-ink text-display-md leading-none">&times;</button>
@@ -255,8 +266,9 @@ const allTrips = db.select().from(trips).all();
           <Input type="number" name="fuelCost" label="Total Fuel Cost (₹)" placeholder="e.g. 4500" required />
           <Button type="submit" variant="primary" class="w-full mt-sm bg-success text-white hover:bg-success/90 border-transparent">Confirm Completion</Button>
         </form>
-      </Card>
-    </dialog>
+        </Card>
+      </dialog>
+    )}
   </div>
 
   <script is:inline>

@@ -5,6 +5,10 @@ import Badge from '../components/ui/Badge.astro';
 import Button from '../components/ui/Button.astro';
 import { db } from '../db';
 import { vehicles, trips, drivers } from '../db/schema';
+import { canEdit } from '../utils/auth';
+
+const role = Astro.cookies.get('user_role')?.value;
+const isTripsEditable = canEdit(role, 'trips');
 
 // We try-catch in case DB isn't initialized yet
 let allVehicles = [];
@@ -62,9 +66,11 @@ const fleetUtilization = filteredVehicles.length > 0 ? ((activeVehicles / filter
           </select>
           <Button type="submit" variant="secondary" size="md" class="h-10">Filter</Button>
         </form>
-        <a href="/trips">
-          <Button variant="primary" size="md" class="h-10">Dispatch Trip</Button>
-        </a>
+        {isTripsEditable && (
+          <a href="/trips">
+            <Button variant="primary" size="md" class="h-10">Dispatch Trip</Button>
+          </a>
+        )}
       </div>
     </header>
 

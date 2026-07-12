@@ -7,8 +7,15 @@ import Badge from '../../components/ui/Badge.astro';
 import { db } from '../../db';
 import { fuelLogs, maintenanceLogs, vehicles, trips, expenses } from '../../db/schema';
 
+import { canView, canEdit, getRedirectPath } from '../../utils/auth';
+
+const role = Astro.cookies.get('user_role')?.value;
+if (!canView(role, 'fuel')) return Astro.redirect(getRedirectPath(role));
+const isEditable = canEdit(role, 'fuel');
+
 // Form Handling
 if (Astro.request.method === 'POST') {
+  if (!isEditable) return Astro.redirect(getRedirectPath(role));
   const formData = await Astro.request.formData();
   const action = formData.get('action');
 
@@ -57,8 +64,12 @@ const allExpenses = db.select().from(expenses).all();
         <a href="/api/export-analytics.csv" download="transitops-analytics.csv">
           <Button variant="secondary" size="md">Download CSV</Button>
         </a>
-        <Button variant="primary" size="md" class="bg-warning text-black hover:bg-warning/90 border-transparent" onclick="document.getElementById('recordExpenseModal').showModal()">+ Add Expense</Button>
-        <Button variant="primary" size="md" class="bg-warning text-black hover:bg-warning/90 border-transparent" onclick="document.getElementById('recordFuelModal').showModal()">+ Log Fuel</Button>
+        {isEditable && (
+          <Button variant="primary" size="md" class="bg-warning text-black hover:bg-warning/90 border-transparent" onclick="document.getElementById('recordExpenseModal').showModal()">+ Add Expense</Button>
+        )}
+        {isEditable && (
+          <Button variant="primary" size="md" class="bg-warning text-black hover:bg-warning/90 border-transparent" onclick="document.getElementById('recordFuelModal').showModal()">+ Log Fuel</Button>
+        )}
       </div>
     </header>
 
@@ -150,7 +161,8 @@ const allExpenses = db.select().from(expenses).all();
       )}
     </div>
 
-    <dialog id="recordFuelModal" class="p-0 bg-transparent backdrop:bg-primary/20 backdrop:backdrop-blur-sm rounded-lg shadow-level-4">
+    {isEditable && (
+      <dialog id="recordFuelModal" class="p-0 bg-transparent backdrop:bg-primary/20 backdrop:backdrop-blur-sm rounded-lg shadow-level-4">
       <Card variant="marketing" class="w-[400px] m-auto max-w-[90vw]">
         <div class="flex justify-between items-center mb-md">
           <h2 class="text-display-md text-ink">Record Fuel Log</h2>
@@ -213,8 +225,9 @@ const allExpenses = db.select().from(expenses).all();
           
           <Button type="submit" variant="primary" class="w-full mt-sm bg-warning text-black hover:bg-warning/90 border-transparent">Save Expense</Button>
         </form>
-      </Card>
-    </dialog>
+        </Card>
+      </dialog>
+    )}
   </div>
 
   <script is:inline>

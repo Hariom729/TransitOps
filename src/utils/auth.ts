@@ -1,24 +1,41 @@
-export const ROLE_PERMISSIONS = {
-  'Fleet Manager': ['/vehicles', '/maintenance'],
-  'Dispatcher': ['/', '/trips'],
-  'Safety Officer': ['/drivers'],
-  'Financial Analyst': ['/finance', '/api/export-analytics.csv']
+type Permission = 'edit' | 'view' | 'none';
+type Module = 'fleet' | 'driver' | 'trips' | 'fuel' | 'analytics';
+
+export const RBAC: Record<string, Record<Module, Permission>> = {
+  'Fleet Manager': { fleet: 'edit', driver: 'edit', trips: 'none', fuel: 'none', analytics: 'edit' },
+  'Dispatcher': { fleet: 'view', driver: 'none', trips: 'edit', fuel: 'none', analytics: 'none' },
+  'Safety Officer': { fleet: 'none', driver: 'edit', trips: 'view', fuel: 'none', analytics: 'none' },
+  'Financial Analyst': { fleet: 'view', driver: 'none', trips: 'none', fuel: 'edit', analytics: 'edit' },
 };
 
-export function hasAccess(role: string | undefined, path: string): boolean {
+export function canView(role: string | undefined, module: Module): boolean {
   if (!role) return false;
-  if (role === 'Fleet Manager' && (path === '/vehicles' || path === '/maintenance')) return true;
-  if (role === 'Dispatcher' && (path === '/' || path === '/trips')) return true;
-  if (role === 'Safety Officer' && path === '/drivers') return true;
-  if (role === 'Financial Analyst' && (path === '/finance' || path === '/api/export-analytics.csv')) return true;
+  const perms = RBAC[role];
+  if (!perms) return false;
+  return perms[module] === 'view' || perms[module] === 'edit';
+}
+
+export function canEdit(role: string | undefined, module: Module): boolean {
+  if (!role) return false;
+  const perms = RBAC[role];
+  if (!perms) return false;
+  return perms[module] === 'edit';
+}
+
+export function hasAccess(role: string | undefined, path: string): boolean {
+  if (path === '/vehicles' || path === '/maintenance') return canView(role, 'fleet');
+  if (path === '/drivers') return canView(role, 'driver');
+  if (path === '/' || path === '/trips') return canView(role, 'trips');
+  if (path === '/finance') return canView(role, 'fuel');
+  if (path === '/finance/reports') return canView(role, 'analytics');
+  if (path === '/settings') return true;
   
-  // Allow all roles to access root / to redirect them properly
   return false;
 }
 
 export function getRedirectPath(role: string | undefined): string {
   if (role === 'Fleet Manager') return '/vehicles';
-  if (role === 'Dispatcher') return '/';
+  if (role === 'Dispatcher') return '/trips';
   if (role === 'Safety Officer') return '/drivers';
   if (role === 'Financial Analyst') return '/finance';
   return '/login';

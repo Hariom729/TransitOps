@@ -7,11 +7,17 @@ import Input from '../../components/ui/Input.astro';
 import { db } from '../../db';
 import { maintenanceLogs, vehicles } from '../../db/schema';
 import { eq } from 'drizzle-orm';
+import { canView, canEdit, getRedirectPath } from '../../utils/auth';
+
+const role = Astro.cookies.get('user_role')?.value;
+if (!canView(role, 'fleet')) return Astro.redirect(getRedirectPath(role));
+const isEditable = canEdit(role, 'fleet');
 
 const allVehicles = db.select().from(vehicles).all();
 
 // Form Handling
 if (Astro.request.method === 'POST') {
+  if (!isEditable) return Astro.redirect(getRedirectPath(role));
   const formData = await Astro.request.formData();
   const action = formData.get('action');
 
@@ -58,8 +64,9 @@ const availableVehicles = allVehicles.filter(v => v.status === 'Available');
     </header>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-lg">
-      <div>
-        <Card variant="marketing" class="sticky top-24">
+      {isEditable && (
+        <div>
+          <Card variant="marketing" class="sticky top-24">
           <h2 class="text-display-md text-ink mb-md">Record Maintenance</h2>
           <form method="post" class="space-y-md">
             <input type="hidden" name="action" value="create" />
@@ -91,8 +98,9 @@ const availableVehicles = allVehicles.filter(v => v.status === 'Available');
           </form>
         </Card>
       </div>
+      )}
 
-      <div class="lg:col-span-2 space-y-md">
+      <div class={`space-y-md ${isEditable ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
         <h2 class="text-display-md text-ink mb-md">Maintenance History</h2>
         {allLogs.length === 0 ? (
           <Card variant="marketing">

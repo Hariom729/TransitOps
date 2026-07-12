@@ -1,0 +1,122 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Card from '../components/ui/Card.astro';
+import Input from '../components/ui/Input.astro';
+import Button from '../components/ui/Button.astro';
+import { db } from '../db';
+import { settings } from '../db/schema';
+import { eq } from 'drizzle-orm';
+
+// Ensure at least one settings row exists
+let globalSettings = db.select().from(settings).where(eq(settings.id, '1')).get();
+if (!globalSettings) {
+  db.insert(settings).values({
+    id: '1',
+    depotName: 'Gandhinagar Depot GJ4',
+    currency: 'INR (Rs)',
+    distanceUnit: 'Kilometers'
+  }).run();
+  globalSettings = db.select().from(settings).where(eq(settings.id, '1')).get();
+}
+
+let saveSuccess = false;
+
+if (Astro.request.method === 'POST') {
+  const formData = await Astro.request.formData();
+  
+  db.update(settings).set({
+    depotName: formData.get('depotName') as string,
+    currency: formData.get('currency') as string,
+    distanceUnit: formData.get('distanceUnit') as string,
+  }).where(eq(settings.id, '1')).run();
+  
+  saveSuccess = true;
+  globalSettings = db.select().from(settings).where(eq(settings.id, '1')).get();
+}
+
+const rbacMatrix = [
+  { role: 'Fleet Manager', fleet: '✓', driver: '✓', trips: '-', fuel: '-', analytics: '✓' },
+  { role: 'Dispatcher', fleet: 'View', driver: '-', trips: '✓', fuel: '-', analytics: '-' },
+  { role: 'Safety Officer', fleet: '-', driver: '✓', trips: 'View', fuel: '-', analytics: '-' },
+  { role: 'Financial Analyst', fleet: 'View', driver: '-', trips: '-', fuel: '✓', analytics: '✓' },
+];
+
+---
+<Layout title="Settings">
+  <div class="p-lg md:p-xl lg:p-4xl max-w-[1400px] mx-auto space-y-xl">
+    <header>
+      <h1 class="text-display-lg text-ink">Settings & RBAC</h1>
+      <p class="text-body-lg text-body">Manage global preferences and view role permissions.</p>
+    </header>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-2xl">
+      <!-- General Settings Form -->
+      <section>
+        <h2 class="text-body-sm-strong uppercase tracking-widest text-body mb-lg font-mono">General</h2>
+        <Card variant="soft" class="p-lg">
+          <form method="post" class="space-y-lg">
+            <Input 
+              type="text" 
+              name="depotName" 
+              label="Depot Name" 
+              value={globalSettings?.depotName} 
+              required 
+            />
+            <Input 
+              type="text" 
+              name="currency" 
+              label="Currency" 
+              value={globalSettings?.currency} 
+              required 
+            />
+            <Input 
+              type="text" 
+              name="distanceUnit" 
+              label="Distance Unit" 
+              value={globalSettings?.distanceUnit} 
+              required 
+            />
+            
+            <div class="pt-sm border-t border-hairline flex items-center gap-md mt-md">
+              <Button type="submit" variant="primary">Save changes</Button>
+              {saveSuccess && <span class="text-success text-body-sm">Settings saved successfully!</span>}
+            </div>
+          </form>
+        </Card>
+      </section>
+
+      <!-- RBAC Matrix -->
+      <section>
+        <h2 class="text-body-sm-strong uppercase tracking-widest text-body mb-lg font-mono">Role-Based Access (RBAC)</h2>
+        <Card variant="soft" class="p-0 overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse whitespace-nowrap">
+              <thead>
+                <tr class="bg-canvas-soft border-b border-hairline text-caption-mono text-body">
+                  <th class="px-md py-sm font-normal">Role</th>
+                  <th class="px-md py-sm font-normal text-center">Fleet</th>
+                  <th class="px-md py-sm font-normal text-center">Driver</th>
+                  <th class="px-md py-sm font-normal text-center">Trips</th>
+                  <th class="px-md py-sm font-normal text-center">Fuel/Exp.</th>
+                  <th class="px-md py-sm font-normal text-center">Analytics</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-hairline">
+                {rbacMatrix.map(row => (
+                  <tr class="hover:bg-canvas transition-colors">
+                    <td class="px-md py-sm text-body-sm-strong text-ink">{row.role}</td>
+                    <td class="px-md py-sm text-body-sm text-body text-center font-mono">{row.fleet}</td>
+                    <td class="px-md py-sm text-body-sm text-body text-center font-mono">{row.driver}</td>
+                    <td class="px-md py-sm text-body-sm text-body text-center font-mono">{row.trips}</td>
+                    <td class="px-md py-sm text-body-sm text-body text-center font-mono">{row.fuel}</td>
+                    <td class="px-md py-sm text-body-sm text-body text-center font-mono">{row.analytics}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      </section>
+    </div>
+  </div>
+</Layout>

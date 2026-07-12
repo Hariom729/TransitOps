@@ -72,3 +72,10 @@ export const expenses = sqliteTable('expenses', {
   date: text('date').notNull(),
   description: text('description'),
 });
+
+export const settings = sqliteTable('settings', {
+  id: text('id').primaryKey(),
+  depotName: text('depot_name').notNull().default('Gandhinagar Depot GJ4'),
+  currency: text('currency').notNull().default('INR (Rs)'),
+  distanceUnit: text('distance_unit').notNull().default('Kilometers'),
+});

@@ -20,6 +20,7 @@ const role = Astro.cookies.get('user_role')?.value;
       {hasAccess(role, '/drivers') && <a href="/drivers" class="text-body-sm text-body hover:text-ink px-sm py-xs rounded-full transition-colors">Drivers</a>}
       {hasAccess(role, '/trips') && <a href="/trips" class="text-body-sm text-body hover:text-ink px-sm py-xs rounded-full transition-colors">Trips</a>}
       {hasAccess(role, '/finance') && <a href="/finance" class="text-body-sm text-body hover:text-ink px-sm py-xs rounded-full transition-colors">Finance</a>}
+      <a href="/settings" class="text-body-sm text-body hover:text-ink px-sm py-xs rounded-full transition-colors">Settings</a>
     </div>
   </div>
 

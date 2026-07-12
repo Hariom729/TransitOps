@@ -7,11 +7,17 @@ import Input from '../../components/ui/Input.astro';
 import { db } from '../../db';
 import { vehicles } from '../../db/schema';
 import { eq } from 'drizzle-orm';
+import { canView, canEdit, getRedirectPath } from '../../utils/auth';
+
+const role = Astro.cookies.get('user_role')?.value;
+if (!canView(role, 'fleet')) return Astro.redirect(getRedirectPath(role));
+const isEditable = canEdit(role, 'fleet');
 
 let errorMsg = '';
 
 // Form Handling
 if (Astro.request.method === 'POST') {
+  if (!isEditable) return Astro.redirect(getRedirectPath(role));
   const formData = await Astro.request.formData();
   const action = formData.get('action');
 
@@ -88,10 +94,12 @@ const allVehicles = db.select().from(vehicles).all().filter(v => {
           </select>
           <Button type="submit" variant="secondary" size="md" class="h-10">Search</Button>
         </form>
-        <Button id="openModalBtn" variant="primary" size="md" class="h-10 flex items-center gap-2">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-          Add
-        </Button>
+        {isEditable && (
+          <Button id="openModalBtn" variant="primary" size="md" class="h-10 flex items-center gap-2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+            Add
+          </Button>
+        )}
       </div>
     </header>
 
@@ -134,11 +142,13 @@ const allVehicles = db.select().from(vehicles).all().filter(v => {
                  }>{v.status}</Badge>
               </td>
               <td class="p-md text-right">
-                <form method="post" class="inline">
-                  <input type="hidden" name="action" value="delete" />
-                  <input type="hidden" name="id" value={v.id} />
-                  <button type="submit" class="text-error hover:text-error-deep text-body-sm font-medium">Remove</button>
-                </form>
+                {isEditable && (
+                  <form method="post" class="inline">
+                    <input type="hidden" name="action" value="delete" />
+                    <input type="hidden" name="id" value={v.id} />
+                    <button type="submit" class="text-error hover:text-error-deep text-body-sm font-medium">Remove</button>
+                  </form>
+                )}
               </td>
             </tr>
           ))}
@@ -147,8 +157,9 @@ const allVehicles = db.select().from(vehicles).all().filter(v => {
       {allVehicles.length === 0 && <p class="text-center py-xl text-body">No vehicles found matching your criteria.</p>}
     </Card>
 
-    <dialog id="addVehicleModal" class="p-0 bg-transparent backdrop:bg-primary/20 backdrop:backdrop-blur-sm rounded-lg shadow-level-4">
-      <Card variant="marketing" class="w-[400px] m-auto max-w-[90vw]">
+    {isEditable && (
+      <dialog id="addVehicleModal" class="p-0 bg-transparent backdrop:bg-primary/20 backdrop:backdrop-blur-sm rounded-lg shadow-level-4">
+        <Card variant="marketing" class="w-[500px] m-auto max-w-[90vw]">
         <div class="flex justify-between items-center mb-md">
           <h2 class="text-display-md text-ink">Register Vehicle</h2>
           <button id="closeModalBtn" type="button" class="text-body hover:text-ink text-display-md leading-none">&times;</button>
@@ -170,8 +181,9 @@ const allVehicles = db.select().from(vehicles).all().filter(v => {
           <Input type="number" name="acquisitionCost" label="Acquisition Cost (₹)" placeholder="2500000" required />
           <Button type="submit" variant="primary" class="w-full mt-sm">Register Vehicle</Button>
         </form>
-      </Card>
-    </dialog>
+        </Card>
+      </dialog>
+    )}
   </div>
 
   <script>
