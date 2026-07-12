@@ -4,7 +4,7 @@ export const users = sqliteTable('users', {
   id: text('id').primaryKey(),
   email: text('email').notNull().unique(),
   password: text('password').notNull(),
-  role: text('role', { enum: ['Fleet Manager', 'Driver', 'Safety Officer', 'Financial Analyst'] }).notNull(),
+  role: text('role', { enum: ['Fleet Manager', 'Dispatcher', 'Safety Officer', 'Financial Analyst'] }).notNull(),
 });
 
 export const vehicles = sqliteTable('vehicles', {

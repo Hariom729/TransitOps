@@ -19,28 +19,51 @@ try {
   console.log("DB not initialized yet.");
 }
 
-const activeVehicles = allVehicles.filter(v => v.status === 'On Trip').length;
-const availableVehicles = allVehicles.filter(v => v.status === 'Available').length;
-const maintenanceVehicles = allVehicles.filter(v => v.status === 'In Shop').length;
+const filterType = Astro.url.searchParams.get('type') || '';
+const filterStatus = Astro.url.searchParams.get('status') || '';
+
+const filteredVehicles = allVehicles.filter(v => {
+  if (filterType && v.type !== filterType) return false;
+  if (filterStatus && v.status !== filterStatus) return false;
+  return true;
+});
+
+const activeVehicles = filteredVehicles.filter(v => v.status === 'On Trip').length;
+const availableVehicles = filteredVehicles.filter(v => v.status === 'Available').length;
+const maintenanceVehicles = filteredVehicles.filter(v => v.status === 'In Shop').length;
 
 const activeTrips = allTrips.filter(t => t.status === 'Dispatched').length;
 const pendingTrips = allTrips.filter(t => t.status === 'Draft').length;
 
 const driversOnDuty = allDrivers.filter(d => d.status === 'On Trip' || d.status === 'Available').length;
-const fleetUtilization = allVehicles.length > 0 ? ((activeVehicles / allVehicles.length) * 100).toFixed(1) : 0;
+const fleetUtilization = filteredVehicles.length > 0 ? ((activeVehicles / filteredVehicles.length) * 100).toFixed(1) : 0;
 ---
 
 <Layout title="Dashboard">
   <div class="p-lg md:p-xl lg:p-4xl space-y-xl relative">
-    <header class="flex flex-col md:flex-row justify-between items-start md:items-end gap-md">
+    <header class="flex flex-col xl:flex-row justify-between items-start xl:items-end gap-md">
       <div>
         <h1 class="text-display-lg text-ink mb-xs">Command Center</h1>
         <p class="text-body-lg text-body">Real-time overview of your transport operations.</p>
       </div>
-      <div class="flex gap-sm">
-        <Button variant="secondary" size="md">Export Report</Button>
+      <div class="flex flex-col sm:flex-row gap-sm items-start sm:items-end w-full xl:w-auto">
+        <form method="get" class="flex gap-2">
+          <select name="type" class="h-10 px-sm bg-canvas text-ink border border-hairline rounded-sm text-body-sm focus-visible:outline-none focus-visible:border-ink w-32">
+            <option value="">All Types</option>
+            <option value="Van" selected={filterType === 'Van'}>Van</option>
+            <option value="Truck" selected={filterType === 'Truck'}>Truck</option>
+            <option value="Car" selected={filterType === 'Car'}>Car</option>
+          </select>
+          <select name="status" class="h-10 px-sm bg-canvas text-ink border border-hairline rounded-sm text-body-sm focus-visible:outline-none focus-visible:border-ink w-32">
+            <option value="">All Statuses</option>
+            <option value="Available" selected={filterStatus === 'Available'}>Available</option>
+            <option value="On Trip" selected={filterStatus === 'On Trip'}>On Trip</option>
+            <option value="In Shop" selected={filterStatus === 'In Shop'}>In Shop</option>
+          </select>
+          <Button type="submit" variant="secondary" size="md" class="h-10">Filter</Button>
+        </form>
         <a href="/trips">
-          <Button variant="primary" size="md">Dispatch Trip</Button>
+          <Button variant="primary" size="md" class="h-10">Dispatch Trip</Button>
         </a>
       </div>
     </header>
@@ -52,7 +75,7 @@ const fleetUtilization = allVehicles.length > 0 ? ((activeVehicles / allVehicles
       <Card variant="soft" class="flex flex-col gap-xs min-h-[160px]">
         <span class="text-caption-mono text-body uppercase">Fleet Utilization</span>
         <div class="text-display-xl tracking-tighter text-ink mt-auto">{fleetUtilization}%</div>
-        <span class="text-body-sm text-body">{activeVehicles} active of {allVehicles.length} total</span>
+        <span class="text-body-sm text-body">{activeVehicles} active of {filteredVehicles.length} total</span>
       </Card>
       
       <Card variant="soft" class="flex flex-col gap-xs min-h-[160px]">
