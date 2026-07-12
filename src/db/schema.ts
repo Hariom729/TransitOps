@@ -47,6 +47,7 @@ export const trips = sqliteTable('trips', {
 export const maintenanceLogs = sqliteTable('maintenance_logs', {
   id: text('id').primaryKey(),
   vehicleId: text('vehicle_id').notNull().references(() => vehicles.id, { onDelete: 'cascade' }),
+  tripId: text('trip_id').references(() => trips.id, { onDelete: 'cascade' }),
   description: text('description').notNull(),
   cost: real('cost').notNull(),
   date: text('date').notNull(),
@@ -60,4 +61,14 @@ export const fuelLogs = sqliteTable('fuel_logs', {
   liters: real('liters').notNull(),
   cost: real('cost').notNull(),
   date: text('date').notNull(),
+});
+
+export const expenses = sqliteTable('expenses', {
+  id: text('id').primaryKey(),
+  vehicleId: text('vehicle_id').references(() => vehicles.id, { onDelete: 'cascade' }),
+  tripId: text('trip_id').references(() => trips.id, { onDelete: 'cascade' }),
+  category: text('category').notNull(),
+  amount: real('amount').notNull(),
+  date: text('date').notNull(),
+  description: text('description'),
 });

@@ -28,7 +28,7 @@ if (Astro.request.method === 'POST') {
       </div>
 
       <form method="post" class="space-y-md">
-        <Input type="email" name="email" label="Email Address" placeholder="you@company.com" required />
+        <Input type="email" name="email" label="Email Address" placeholder="you@company.com" pattern="[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.com$" title="Please enter a valid .com email address" required />
         <Input type="password" name="password" label="Password" required />
         
         <div class="flex flex-col gap-2">
