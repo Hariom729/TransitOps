@@ -8,93 +8,188 @@ import { db } from '../../db';
 import { vehicles } from '../../db/schema';
 import { eq } from 'drizzle-orm';
 
+let errorMsg = '';
+
 // Form Handling
 if (Astro.request.method === 'POST') {
   const formData = await Astro.request.formData();
   const action = formData.get('action');
 
-  if (action === 'create') {
-    await db.insert(vehicles).values({
-      id: crypto.randomUUID(),
-      registrationNumber: formData.get('registrationNumber') as string,
-      nameModel: formData.get('nameModel') as string,
-      type: formData.get('type') as string,
-      maxLoadCapacity: Number(formData.get('maxLoadCapacity')),
-      acquisitionCost: Number(formData.get('acquisitionCost')),
-      status: 'Available'
-    });
-  } else if (action === 'delete') {
-    const id = formData.get('id') as string;
-    await db.delete(vehicles).where(eq(vehicles.id, id));
+  try {
+    if (action === 'create') {
+      await db.insert(vehicles).values({
+        id: crypto.randomUUID(),
+        registrationNumber: formData.get('registrationNumber') as string,
+        nameModel: formData.get('nameModel') as string,
+        type: formData.get('type') as string,
+        maxLoadCapacity: Number(formData.get('maxLoadCapacity')),
+        acquisitionCost: Number(formData.get('acquisitionCost')),
+        status: 'Available'
+      });
+    } else if (action === 'delete') {
+      const id = formData.get('id') as string;
+      await db.delete(vehicles).where(eq(vehicles.id, id));
+    }
+  } catch (e: any) {
+    if (e.message?.includes('UNIQUE constraint failed')) {
+      errorMsg = 'A vehicle with this registration number already exists.';
+    } else {
+      errorMsg = 'An error occurred while saving the vehicle.';
+    }
   }
 }
 
-const allVehicles = db.select().from(vehicles).all();
+const search = Astro.url.searchParams.get('search')?.toLowerCase() || '';
+const filterType = Astro.url.searchParams.get('filterType') || 'All';
+const filterStatus = Astro.url.searchParams.get('filterStatus') || 'All';
+
+const allVehicles = db.select().from(vehicles).all().filter(v => {
+  let match = true;
+  if (search) {
+    match = match && (
+      v.registrationNumber.toLowerCase().includes(search) || 
+      v.nameModel.toLowerCase().includes(search) || 
+      v.type.toLowerCase().includes(search)
+    );
+  }
+  if (filterType !== 'All') {
+    match = match && v.type === filterType;
+  }
+  if (filterStatus !== 'All') {
+    match = match && v.status === filterStatus;
+  }
+  return match;
+});
 ---
 
 <Layout title="Vehicles">
   <div class="p-lg md:p-xl lg:p-4xl space-y-xl">
-    <header class="flex justify-between items-end">
+    <header class="flex flex-col md:flex-row justify-between items-start md:items-end gap-md">
       <div>
         <h1 class="text-display-lg text-ink">Vehicle Registry</h1>
         <p class="text-body-lg text-body">Manage your fleet assets and maintenance.</p>
       </div>
+      <div class="flex gap-sm w-full md:w-auto">
+        <form method="get" class="flex flex-col md:flex-row gap-2 w-full md:w-auto">
+          <input type="text" name="search" value={search} placeholder="Search vehicles..." class="h-10 px-sm bg-canvas text-ink border border-hairline rounded-sm text-body-sm focus-visible:outline-none focus-visible:border-ink w-full md:w-48" />
+          <select name="filterType" class="h-10 px-sm bg-canvas text-ink border border-hairline rounded-sm text-body-sm focus-visible:outline-none focus-visible:border-ink">
+            <option value="All" selected={filterType === 'All'}>All Types</option>
+            <option value="Van" selected={filterType === 'Van'}>Van</option>
+            <option value="Truck" selected={filterType === 'Truck'}>Truck</option>
+            <option value="Car" selected={filterType === 'Car'}>Car</option>
+            <option value="Motorcycle" selected={filterType === 'Motorcycle'}>Motorcycle</option>
+          </select>
+          <select name="filterStatus" class="h-10 px-sm bg-canvas text-ink border border-hairline rounded-sm text-body-sm focus-visible:outline-none focus-visible:border-ink">
+            <option value="All" selected={filterStatus === 'All'}>All Statuses</option>
+            <option value="Available" selected={filterStatus === 'Available'}>Available</option>
+            <option value="On Trip" selected={filterStatus === 'On Trip'}>On Trip</option>
+            <option value="In Shop" selected={filterStatus === 'In Shop'}>In Shop</option>
+            <option value="Retired" selected={filterStatus === 'Retired'}>Retired</option>
+          </select>
+          <Button type="submit" variant="secondary" size="md" class="h-10">Search</Button>
+        </form>
+        <Button id="openModalBtn" variant="primary" size="md" class="h-10 flex items-center gap-2">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+          Add
+        </Button>
+      </div>
     </header>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-lg">
-      <div class="lg:col-span-2 space-y-md">
-        {allVehicles.length === 0 ? (
-          <Card variant="marketing">
-            <p class="text-body text-center py-xl">No vehicles found. Register one below.</p>
-          </Card>
-        ) : (
-          <div class="flex flex-col gap-sm">
-            {allVehicles.map(v => (
-              <Card variant="soft" class="flex justify-between items-center px-lg py-md">
-                <div>
-                  <div class="flex items-center gap-sm mb-xs">
-                    <span class="text-body-md-strong text-ink">{v.registrationNumber}</span>
-                    <Badge class={v.status === 'Available' ? 'bg-success/10 text-success' : v.status === 'In Shop' ? 'bg-warning/10 text-warning' : 'bg-primary/10 text-primary'}>{v.status}</Badge>
-                  </div>
-                  <div class="text-body-sm text-body">
-                    {v.nameModel} • {v.type} • {v.maxLoadCapacity} kg max
-                  </div>
-                </div>
-                <div class="flex gap-xs">
-                  <form method="post">
-                    <input type="hidden" name="action" value="delete" />
-                    <input type="hidden" name="id" value={v.id} />
-                    <Button type="submit" variant="secondary" size="sm">Remove</Button>
-                  </form>
-                </div>
-              </Card>
-            ))}
-          </div>
-        )}
+    {errorMsg && (
+      <div class="bg-error/10 text-error px-md py-sm rounded-md border border-error/20 flex items-center justify-between">
+        <span class="text-body-sm-strong">{errorMsg}</span>
+        <button onclick="this.parentElement.remove()" class="text-error hover:text-error-deep">&times;</button>
       </div>
+    )}
 
-      <div>
-        <Card variant="marketing" class="sticky top-24">
-          <h2 class="text-display-md text-ink mb-md">Register Vehicle</h2>
-          <form method="post" class="space-y-md">
-            <input type="hidden" name="action" value="create" />
-            <Input name="registrationNumber" label="Registration Number" placeholder="e.g. VAN-05" required />
-            <Input name="nameModel" label="Make & Model" placeholder="Ford Transit 2024" required />
-            <div class="flex flex-col gap-2">
-              <label class="text-body-sm-strong text-ink">Vehicle Type</label>
-              <select name="type" class="h-10 px-sm bg-canvas text-ink border border-hairline rounded-sm text-body-sm focus-visible:outline-none focus-visible:border-ink">
-                <option value="Van">Van</option>
-                <option value="Truck">Truck</option>
-                <option value="Car">Car</option>
-                <option value="Motorcycle">Motorcycle</option>
-              </select>
-            </div>
-            <Input type="number" name="maxLoadCapacity" label="Max Load (kg)" placeholder="500" required />
-            <Input type="number" name="acquisitionCost" label="Acquisition Cost ($)" placeholder="25000" required />
-            <Button type="submit" variant="primary" class="w-full mt-sm">Register Vehicle</Button>
-          </form>
-        </Card>
-      </div>
-    </div>
+    <Card variant="marketing" class="overflow-x-auto p-0">
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="border-b border-hairline bg-canvas-soft text-body-sm-strong text-ink">
+            <th class="p-md font-medium">Registration</th>
+            <th class="p-md font-medium">Make & Model</th>
+            <th class="p-md font-medium">Type</th>
+            <th class="p-md font-medium">Capacity</th>
+            <th class="p-md font-medium">Odometer</th>
+            <th class="p-md font-medium">Acq. Cost</th>
+            <th class="p-md font-medium">Status</th>
+            <th class="p-md font-medium text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-hairline">
+          {allVehicles.map(v => (
+            <tr class="hover:bg-canvas-soft transition-colors">
+              <td class="p-md text-body-md-strong text-ink">{v.registrationNumber}</td>
+              <td class="p-md text-body-sm text-body">{v.nameModel}</td>
+              <td class="p-md text-body-sm text-body">{v.type}</td>
+              <td class="p-md text-body-sm text-body">{v.maxLoadCapacity >= 1000 ? (v.maxLoadCapacity / 1000) + ' ton' : v.maxLoadCapacity + ' kg'}</td>
+              <td class="p-md text-body-sm text-body">{v.odometer.toLocaleString()} km</td>
+              <td class="p-md text-body-sm text-body">₹{v.acquisitionCost.toLocaleString()}</td>
+              <td class="p-md">
+                 <Badge class={
+                   v.status === 'Available' ? 'bg-success/10 text-success' : 
+                   v.status === 'On Trip' ? 'bg-link/10 text-link' : 
+                   v.status === 'In Shop' ? 'bg-warning/10 text-warning' : 
+                   'bg-error/10 text-error'
+                 }>{v.status}</Badge>
+              </td>
+              <td class="p-md text-right">
+                <form method="post" class="inline">
+                  <input type="hidden" name="action" value="delete" />
+                  <input type="hidden" name="id" value={v.id} />
+                  <button type="submit" class="text-error hover:text-error-deep text-body-sm font-medium">Remove</button>
+                </form>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {allVehicles.length === 0 && <p class="text-center py-xl text-body">No vehicles found matching your criteria.</p>}
+    </Card>
+
+    <dialog id="addVehicleModal" class="p-0 bg-transparent backdrop:bg-primary/20 backdrop:backdrop-blur-sm rounded-lg shadow-level-4">
+      <Card variant="marketing" class="w-[400px] m-auto max-w-[90vw]">
+        <div class="flex justify-between items-center mb-md">
+          <h2 class="text-display-md text-ink">Register Vehicle</h2>
+          <button id="closeModalBtn" type="button" class="text-body hover:text-ink text-display-md leading-none">&times;</button>
+        </div>
+        <form method="post" class="space-y-md">
+          <input type="hidden" name="action" value="create" />
+          <Input name="registrationNumber" label="Registration Number" placeholder="e.g. VAN-05" required />
+          <Input name="nameModel" label="Make & Model" placeholder="Ford Transit 2024" required />
+          <div class="flex flex-col gap-2">
+            <label class="text-body-sm-strong text-ink">Vehicle Type</label>
+            <select name="type" class="h-10 px-sm bg-canvas text-ink border border-hairline rounded-sm text-body-sm focus-visible:outline-none focus-visible:border-ink">
+              <option value="Van">Van</option>
+              <option value="Truck">Truck</option>
+              <option value="Car">Car</option>
+              <option value="Motorcycle">Motorcycle</option>
+            </select>
+          </div>
+          <Input type="number" name="maxLoadCapacity" label="Max Load (kg)" placeholder="500" required />
+          <Input type="number" name="acquisitionCost" label="Acquisition Cost (₹)" placeholder="2500000" required />
+          <Button type="submit" variant="primary" class="w-full mt-sm">Register Vehicle</Button>
+        </form>
+      </Card>
+    </dialog>
   </div>
+
+  <script>
+    const dialog = document.getElementById('addVehicleModal') as HTMLDialogElement;
+    document.getElementById('openModalBtn')?.addEventListener('click', () => dialog.showModal());
+    document.getElementById('closeModalBtn')?.addEventListener('click', () => dialog.close());
+    
+    // Close when clicking outside
+    dialog?.addEventListener('click', (e) => {
+      const dialogDimensions = dialog.getBoundingClientRect()
+      if (
+        e.clientX < dialogDimensions.left ||
+        e.clientX > dialogDimensions.right ||
+        e.clientY < dialogDimensions.top ||
+        e.clientY > dialogDimensions.bottom
+      ) {
+        dialog.close()
+      }
+    })
+  </script>
 </Layout>

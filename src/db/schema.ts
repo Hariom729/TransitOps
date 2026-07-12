@@ -33,8 +33,8 @@ export const trips = sqliteTable('trips', {
   id: text('id').primaryKey(),
   source: text('source').notNull(),
   destination: text('destination').notNull(),
-  vehicleId: text('vehicle_id').notNull().references(() => vehicles.id),
-  driverId: text('driver_id').notNull().references(() => drivers.id),
+  vehicleId: text('vehicle_id').notNull().references(() => vehicles.id, { onDelete: 'cascade' }),
+  driverId: text('driver_id').notNull().references(() => drivers.id, { onDelete: 'cascade' }),
   cargoWeight: real('cargo_weight').notNull(), // in kg
   plannedDistance: real('planned_distance').notNull(), // in km
   status: text('status', { enum: ['Draft', 'Dispatched', 'Completed', 'Cancelled'] }).notNull().default('Draft'),
@@ -46,7 +46,7 @@ export const trips = sqliteTable('trips', {
 
 export const maintenanceLogs = sqliteTable('maintenance_logs', {
   id: text('id').primaryKey(),
-  vehicleId: text('vehicle_id').notNull().references(() => vehicles.id),
+  vehicleId: text('vehicle_id').notNull().references(() => vehicles.id, { onDelete: 'cascade' }),
   description: text('description').notNull(),
   cost: real('cost').notNull(),
   date: text('date').notNull(),
@@ -55,8 +55,8 @@ export const maintenanceLogs = sqliteTable('maintenance_logs', {
 
 export const fuelLogs = sqliteTable('fuel_logs', {
   id: text('id').primaryKey(),
-  vehicleId: text('vehicle_id').notNull().references(() => vehicles.id),
-  tripId: text('trip_id').references(() => trips.id),
+  vehicleId: text('vehicle_id').notNull().references(() => vehicles.id, { onDelete: 'cascade' }),
+  tripId: text('trip_id').references(() => trips.id, { onDelete: 'cascade' }),
   liters: real('liters').notNull(),
   cost: real('cost').notNull(),
   date: text('date').notNull(),

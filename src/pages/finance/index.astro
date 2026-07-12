@@ -54,7 +54,7 @@ const fuelEfficiency = totalLiters > 0 ? (totalDistance / totalLiters).toFixed(2
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-md">
       <Card variant="soft" class="flex flex-col gap-xs min-h-[160px]">
         <span class="text-caption-mono text-body uppercase">Total Op Cost</span>
-        <div class="text-display-xl tracking-tighter text-ink mt-auto">${operationalCost.toFixed(2)}</div>
+        <div class="text-display-xl tracking-tighter text-ink mt-auto">₹{operationalCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
         <span class="text-body-sm text-body">Fuel & Maintenance</span>
       </Card>
       
@@ -66,7 +66,7 @@ const fuelEfficiency = totalLiters > 0 ? (totalDistance / totalLiters).toFixed(2
       
       <Card variant="soft" class="flex flex-col gap-xs min-h-[160px]">
         <span class="text-caption-mono text-body uppercase">Revenue</span>
-        <div class="text-display-lg text-ink mt-auto">${revenue.toFixed(2)}</div>
+        <div class="text-display-lg text-ink mt-auto">₹{revenue.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
         <span class="text-body-sm text-body">{completedTrips.length} Completed Trips</span>
       </Card>
 
