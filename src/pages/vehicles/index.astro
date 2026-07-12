@@ -1,0 +1,100 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Card from '../../components/ui/Card.astro';
+import Button from '../../components/ui/Button.astro';
+import Badge from '../../components/ui/Badge.astro';
+import Input from '../../components/ui/Input.astro';
+import { db } from '../../db';
+import { vehicles } from '../../db/schema';
+import { eq } from 'drizzle-orm';
+
+// Form Handling
+if (Astro.request.method === 'POST') {
+  const formData = await Astro.request.formData();
+  const action = formData.get('action');
+
+  if (action === 'create') {
+    await db.insert(vehicles).values({
+      id: crypto.randomUUID(),
+      registrationNumber: formData.get('registrationNumber') as string,
+      nameModel: formData.get('nameModel') as string,
+      type: formData.get('type') as string,
+      maxLoadCapacity: Number(formData.get('maxLoadCapacity')),
+      acquisitionCost: Number(formData.get('acquisitionCost')),
+      status: 'Available'
+    });
+  } else if (action === 'delete') {
+    const id = formData.get('id') as string;
+    await db.delete(vehicles).where(eq(vehicles.id, id));
+  }
+}
+
+const allVehicles = db.select().from(vehicles).all();
+---
+
+<Layout title="Vehicles">
+  <div class="p-lg md:p-xl lg:p-4xl space-y-xl">
+    <header class="flex justify-between items-end">
+      <div>
+        <h1 class="text-display-lg text-ink">Vehicle Registry</h1>
+        <p class="text-body-lg text-body">Manage your fleet assets and maintenance.</p>
+      </div>
+    </header>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-lg">
+      <div class="lg:col-span-2 space-y-md">
+        {allVehicles.length === 0 ? (
+          <Card variant="marketing">
+            <p class="text-body text-center py-xl">No vehicles found. Register one below.</p>
+          </Card>
+        ) : (
+          <div class="flex flex-col gap-sm">
+            {allVehicles.map(v => (
+              <Card variant="soft" class="flex justify-between items-center px-lg py-md">
+                <div>
+                  <div class="flex items-center gap-sm mb-xs">
+                    <span class="text-body-md-strong text-ink">{v.registrationNumber}</span>
+                    <Badge class={v.status === 'Available' ? 'bg-success/10 text-success' : v.status === 'In Shop' ? 'bg-warning/10 text-warning' : 'bg-primary/10 text-primary'}>{v.status}</Badge>
+                  </div>
+                  <div class="text-body-sm text-body">
+                    {v.nameModel} • {v.type} • {v.maxLoadCapacity} kg max
+                  </div>
+                </div>
+                <div class="flex gap-xs">
+                  <form method="post">
+                    <input type="hidden" name="action" value="delete" />
+                    <input type="hidden" name="id" value={v.id} />
+                    <Button type="submit" variant="secondary" size="sm">Remove</Button>
+                  </form>
+                </div>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <Card variant="marketing" class="sticky top-24">
+          <h2 class="text-display-md text-ink mb-md">Register Vehicle</h2>
+          <form method="post" class="space-y-md">
+            <input type="hidden" name="action" value="create" />
+            <Input name="registrationNumber" label="Registration Number" placeholder="e.g. VAN-05" required />
+            <Input name="nameModel" label="Make & Model" placeholder="Ford Transit 2024" required />
+            <div class="flex flex-col gap-2">
+              <label class="text-body-sm-strong text-ink">Vehicle Type</label>
+              <select name="type" class="h-10 px-sm bg-canvas text-ink border border-hairline rounded-sm text-body-sm focus-visible:outline-none focus-visible:border-ink">
+                <option value="Van">Van</option>
+                <option value="Truck">Truck</option>
+                <option value="Car">Car</option>
+                <option value="Motorcycle">Motorcycle</option>
+              </select>
+            </div>
+            <Input type="number" name="maxLoadCapacity" label="Max Load (kg)" placeholder="500" required />
+            <Input type="number" name="acquisitionCost" label="Acquisition Cost ($)" placeholder="25000" required />
+            <Button type="submit" variant="primary" class="w-full mt-sm">Register Vehicle</Button>
+          </form>
+        </Card>
+      </div>
+    </div>
+  </div>
+</Layout>

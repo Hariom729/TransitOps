@@ -1,0 +1,27 @@
+---
+type Props = {
+  type?: 'text' | 'email' | 'password' | 'number';
+  label?: string;
+  name: string;
+  id?: string;
+  placeholder?: string;
+  required?: boolean;
+  class?: string;
+  value?: string | number;
+};
+
+const { type = 'text', label, name, id = name, placeholder, required, class: className, value, ...props } = Astro.props;
+---
+<div class={`flex flex-col gap-2 ${className || ''}`}>
+  {label && <label for={id} class="text-body-sm-strong text-ink">{label}</label>}
+  <input
+    type={type}
+    id={id}
+    name={name}
+    value={value}
+    placeholder={placeholder}
+    required={required}
+    class="h-10 px-sm bg-canvas text-ink border border-hairline rounded-sm text-body-sm focus-visible:outline-none focus-visible:border-ink transition-colors disabled:opacity-50"
+    {...props}
+  />
+</div>

@@ -1,0 +1,32 @@
+---
+type Props = {
+  variant?: 'primary' | 'secondary' | 'nav-signup' | 'nav-login' | 'nav-ask-ai';
+  size?: 'md' | 'lg' | 'sm';
+  class?: string;
+  type?: 'button' | 'submit' | 'reset';
+};
+
+const { variant = 'primary', size = 'lg', class: className, type = 'button', ...props } = Astro.props;
+
+const baseStyles = 'inline-flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none cursor-pointer';
+
+const variants = {
+  primary: 'bg-primary text-on-primary hover:bg-ink/90',
+  secondary: 'bg-canvas text-ink hover:bg-canvas-soft border border-hairline',
+  'nav-signup': 'bg-primary text-on-primary hover:bg-ink/90',
+  'nav-login': 'bg-canvas text-ink hover:bg-canvas-soft',
+  'nav-ask-ai': 'bg-canvas text-ink border border-hairline hover:bg-canvas-soft',
+};
+
+const sizes = {
+  md: 'h-8 px-3 text-button-md rounded-pill',
+  lg: 'h-12 px-6 text-button-lg rounded-pill',
+  sm: 'h-7 px-2 text-body-sm-strong rounded-sm',
+};
+
+const combinedClasses = [baseStyles, variants[variant], sizes[size], className].join(' ');
+---
+
+<button type={type} class={combinedClasses} {...props}>
+  <slot />
+</button>

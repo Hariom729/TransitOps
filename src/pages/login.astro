@@ -1,0 +1,41 @@
+---
+import Layout from '../layouts/Layout.astro';
+import Card from '../components/ui/Card.astro';
+import Input from '../components/ui/Input.astro';
+import Button from '../components/ui/Button.astro';
+
+if (Astro.request.method === 'POST') {
+  const formData = await Astro.request.formData();
+  Astro.cookies.set('user_role', formData.get('role')?.toString() || 'Fleet Manager', { path: '/' });
+  return Astro.redirect('/');
+}
+---
+<Layout title="Login">
+  <div class="min-h-[calc(100vh-64px)] flex items-center justify-center p-md">
+    <Card variant="marketing-large" class="w-full max-w-[448px] p-2xl">
+      <div class="flex flex-col items-center mb-xl">
+        <div class="w-12 h-12 rounded-full bg-primary flex items-center justify-center mb-md">
+          <span class="text-on-primary text-display-sm tracking-tighter">TO</span>
+        </div>
+        <h1 class="text-display-md text-ink text-center">Log in to TransitOps</h1>
+      </div>
+
+      <form method="post" class="space-y-md">
+        <Input type="email" name="email" label="Email Address" placeholder="you@company.com" required />
+        <Input type="password" name="password" label="Password" required />
+        
+        <div class="flex flex-col gap-2">
+          <label for="role" class="text-body-sm-strong text-ink">Role (Hackathon Mock)</label>
+          <select id="role" name="role" class="h-10 px-sm bg-canvas text-ink border border-hairline rounded-sm text-body-sm focus-visible:outline-none focus-visible:border-ink">
+            <option value="Fleet Manager">Fleet Manager</option>
+            <option value="Driver">Driver</option>
+            <option value="Safety Officer">Safety Officer</option>
+            <option value="Financial Analyst">Financial Analyst</option>
+          </select>
+        </div>
+
+        <Button type="submit" variant="primary" class="w-full mt-sm">Continue</Button>
+      </form>
+    </Card>
+  </div>
+</Layout>

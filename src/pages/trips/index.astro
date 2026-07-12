@@ -1,0 +1,183 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Card from '../../components/ui/Card.astro';
+import Button from '../../components/ui/Button.astro';
+import Badge from '../../components/ui/Badge.astro';
+import Input from '../../components/ui/Input.astro';
+import { db } from '../../db';
+import { trips, vehicles, drivers } from '../../db/schema';
+import { eq } from 'drizzle-orm';
+
+const allVehicles = db.select().from(vehicles).all();
+const allDrivers = db.select().from(drivers).all();
+const availableVehicles = allVehicles.filter(v => v.status === 'Available');
+const availableDrivers = allDrivers.filter(d => d.status === 'Available' && new Date(d.licenseExpiryDate) >= new Date());
+
+// Form Handling
+let errorMessage = '';
+
+if (Astro.request.method === 'POST') {
+  const formData = await Astro.request.formData();
+  const action = formData.get('action');
+
+  if (action === 'create') {
+    const vehicleId = formData.get('vehicleId') as string;
+    const driverId = formData.get('driverId') as string;
+    const cargoWeight = Number(formData.get('cargoWeight'));
+    const vehicle = allVehicles.find(v => v.id === vehicleId);
+
+    if (vehicle && cargoWeight > vehicle.maxLoadCapacity) {
+      errorMessage = `Cargo weight (${cargoWeight}kg) exceeds vehicle capacity (${vehicle.maxLoadCapacity}kg).`;
+    } else {
+      await db.insert(trips).values({
+        id: crypto.randomUUID(),
+        source: formData.get('source') as string,
+        destination: formData.get('destination') as string,
+        vehicleId,
+        driverId,
+        cargoWeight,
+        plannedDistance: Number(formData.get('plannedDistance')),
+        status: 'Draft',
+        createdAt: new Date().toISOString(),
+      });
+      // Refresh page to show new trip
+      return Astro.redirect('/trips');
+    }
+  } else if (action === 'dispatch') {
+    const tripId = formData.get('tripId') as string;
+    const trip = db.select().from(trips).where(eq(trips.id, tripId)).get();
+    
+    if (trip) {
+      // Update trip
+      await db.update(trips).set({ status: 'Dispatched' }).where(eq(trips.id, tripId));
+      // Update driver & vehicle
+      await db.update(vehicles).set({ status: 'On Trip' }).where(eq(vehicles.id, trip.vehicleId));
+      await db.update(drivers).set({ status: 'On Trip' }).where(eq(drivers.id, trip.driverId));
+    }
+  } else if (action === 'complete') {
+    const tripId = formData.get('tripId') as string;
+    const trip = db.select().from(trips).where(eq(trips.id, tripId)).get();
+    
+    if (trip) {
+      await db.update(trips).set({ status: 'Completed', completedAt: new Date().toISOString() }).where(eq(trips.id, tripId));
+      await db.update(vehicles).set({ status: 'Available' }).where(eq(vehicles.id, trip.vehicleId));
+      await db.update(drivers).set({ status: 'Available' }).where(eq(drivers.id, trip.driverId));
+    }
+  } else if (action === 'cancel') {
+    const tripId = formData.get('tripId') as string;
+    const trip = db.select().from(trips).where(eq(trips.id, tripId)).get();
+    
+    if (trip) {
+      await db.update(trips).set({ status: 'Cancelled' }).where(eq(trips.id, tripId));
+      if (trip.status === 'Dispatched') {
+        await db.update(vehicles).set({ status: 'Available' }).where(eq(vehicles.id, trip.vehicleId));
+        await db.update(drivers).set({ status: 'Available' }).where(eq(drivers.id, trip.driverId));
+      }
+    }
+  }
+}
+
+const allTrips = db.select().from(trips).all();
+---
+
+<Layout title="Trips">
+  <div class="p-lg md:p-xl lg:p-4xl space-y-xl">
+    <header class="flex justify-between items-end">
+      <div>
+        <h1 class="text-display-lg text-ink">Trip Management</h1>
+        <p class="text-body-lg text-body">Dispatch and monitor active deliveries.</p>
+      </div>
+    </header>
+
+    {errorMessage && (
+      <div class="bg-error-soft text-error-deep p-md rounded-md text-body-md border border-error/20">
+        {errorMessage}
+      </div>
+    )}
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-lg">
+      <div class="lg:col-span-2 space-y-md">
+        {allTrips.length === 0 ? (
+          <Card variant="marketing">
+            <p class="text-body text-center py-xl">No trips created yet. Draft one below.</p>
+          </Card>
+        ) : (
+          <div class="flex flex-col gap-sm">
+            {allTrips.map(t => {
+               const v = allVehicles.find(v => v.id === t.vehicleId);
+               const d = allDrivers.find(d => d.id === t.driverId);
+               
+               return (
+                <Card variant="soft" class="flex flex-col md:flex-row md:justify-between md:items-center px-lg py-md gap-md">
+                  <div>
+                    <div class="flex items-center gap-sm mb-xs">
+                      <span class="text-body-md-strong text-ink">{t.source} → {t.destination}</span>
+                      <Badge class={t.status === 'Completed' ? 'bg-success/10 text-success' : t.status === 'Dispatched' ? 'bg-primary/10 text-primary' : t.status === 'Cancelled' ? 'bg-error/10 text-error' : 'bg-mute/10 text-mute'}>{t.status}</Badge>
+                    </div>
+                    <div class="text-body-sm text-body flex flex-col sm:flex-row sm:items-center gap-xs">
+                      <span>Vehicle: {v?.registrationNumber}</span>
+                      <span class="hidden sm:inline">•</span>
+                      <span>Driver: {d?.name}</span>
+                      <span class="hidden sm:inline">•</span>
+                      <span>{t.cargoWeight}kg / {t.plannedDistance}km</span>
+                    </div>
+                  </div>
+                  <div class="flex gap-xs">
+                    <form method="post" class="flex gap-xs flex-wrap">
+                      <input type="hidden" name="tripId" value={t.id} />
+                      {t.status === 'Draft' && (
+                        <Button type="submit" name="action" value="dispatch" variant="primary" size="sm">Dispatch</Button>
+                      )}
+                      {t.status === 'Dispatched' && (
+                        <Button type="submit" name="action" value="complete" variant="primary" size="sm" class="bg-success text-white hover:bg-success/90">Complete</Button>
+                      )}
+                      {(t.status === 'Draft' || t.status === 'Dispatched') && (
+                        <Button type="submit" name="action" value="cancel" variant="secondary" size="sm">Cancel</Button>
+                      )}
+                    </form>
+                  </div>
+                </Card>
+               );
+            })}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <Card variant="marketing" class="sticky top-24">
+          <h2 class="text-display-md text-ink mb-md">Create Trip</h2>
+          <form method="post" class="space-y-md">
+            <input type="hidden" name="action" value="create" />
+            <Input name="source" label="Source location" placeholder="Warehouse A" required />
+            <Input name="destination" label="Destination" placeholder="Store 04" required />
+            
+            <div class="flex flex-col gap-2">
+              <label class="text-body-sm-strong text-ink">Vehicle</label>
+              <select name="vehicleId" required class="h-10 px-sm bg-canvas text-ink border border-hairline rounded-sm text-body-sm focus-visible:outline-none focus-visible:border-ink">
+                {availableVehicles.map(v => (
+                  <option value={v.id}>{v.registrationNumber} (Max: {v.maxLoadCapacity}kg)</option>
+                ))}
+                {availableVehicles.length === 0 && <option disabled>No available vehicles</option>}
+              </select>
+            </div>
+            
+            <div class="flex flex-col gap-2">
+              <label class="text-body-sm-strong text-ink">Driver</label>
+              <select name="driverId" required class="h-10 px-sm bg-canvas text-ink border border-hairline rounded-sm text-body-sm focus-visible:outline-none focus-visible:border-ink">
+                {availableDrivers.map(d => (
+                  <option value={d.id}>{d.name} ({d.licenseCategory})</option>
+                ))}
+                {availableDrivers.length === 0 && <option disabled>No available drivers</option>}
+              </select>
+            </div>
+
+            <Input type="number" name="cargoWeight" label="Cargo Weight (kg)" placeholder="400" required />
+            <Input type="number" name="plannedDistance" label="Planned Distance (km)" placeholder="15" required />
+            
+            <Button type="submit" variant="primary" class="w-full mt-sm" disabled={availableVehicles.length === 0 || availableDrivers.length === 0}>Create Draft</Button>
+          </form>
+        </Card>
+      </div>
+    </div>
+  </div>
+</Layout>

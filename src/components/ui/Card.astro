@@ -1,0 +1,24 @@
+---
+type Props = {
+  variant?: 'marketing' | 'marketing-large' | 'soft' | 'pricing' | 'pricing-featured';
+  class?: string;
+};
+
+const { variant = 'marketing', class: className, ...props } = Astro.props;
+
+const baseStyles = 'overflow-hidden border border-hairline relative';
+
+const variants = {
+  marketing: 'bg-canvas text-ink p-lg rounded-md shadow-level-3',
+  'marketing-large': 'bg-canvas text-ink p-xl rounded-lg shadow-level-4',
+  soft: 'bg-canvas-soft text-ink p-lg rounded-md shadow-level-2',
+  pricing: 'bg-canvas text-ink p-xl rounded-lg shadow-level-4',
+  'pricing-featured': 'bg-primary text-on-primary p-xl rounded-lg shadow-level-4 border-none',
+};
+
+const combinedClasses = [baseStyles, variants[variant], className].join(' ');
+---
+
+<div class={combinedClasses} {...props}>
+  <slot />
+</div>

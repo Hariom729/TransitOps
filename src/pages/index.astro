@@ -1,11 +1,89 @@
 ---
-import Welcome from '../components/Welcome.astro';
 import Layout from '../layouts/Layout.astro';
+import Card from '../components/ui/Card.astro';
+import Badge from '../components/ui/Badge.astro';
+import Button from '../components/ui/Button.astro';
+import { db } from '../db';
+import { vehicles, trips, drivers } from '../db/schema';
 
-// Welcome to Astro! Wondering what to do next? Check out the Astro documentation at https://docs.astro.build
-// Don't want to use any of this? Delete everything in this file, the `assets`, `components`, and `layouts` directories, and start fresh.
+// We try-catch in case DB isn't initialized yet
+let allVehicles = [];
+let allTrips = [];
+let allDrivers = [];
+
+try {
+  allVehicles = db.select().from(vehicles).all();
+  allTrips = db.select().from(trips).all();
+  allDrivers = db.select().from(drivers).all();
+} catch (e) {
+  console.log("DB not initialized yet.");
+}
+
+const activeVehicles = allVehicles.filter(v => v.status === 'On Trip').length;
+const availableVehicles = allVehicles.filter(v => v.status === 'Available').length;
+const maintenanceVehicles = allVehicles.filter(v => v.status === 'In Shop').length;
+
+const activeTrips = allTrips.filter(t => t.status === 'Dispatched').length;
+const pendingTrips = allTrips.filter(t => t.status === 'Draft').length;
+
+const driversOnDuty = allDrivers.filter(d => d.status === 'On Trip' || d.status === 'Available').length;
+const fleetUtilization = allVehicles.length > 0 ? ((activeVehicles / allVehicles.length) * 100).toFixed(1) : 0;
 ---
 
-<Layout>
-	<Welcome />
+<Layout title="Dashboard">
+  <div class="p-lg md:p-xl lg:p-4xl space-y-xl relative">
+    <header class="flex flex-col md:flex-row justify-between items-start md:items-end gap-md">
+      <div>
+        <h1 class="text-display-lg text-ink mb-xs">Command Center</h1>
+        <p class="text-body-lg text-body">Real-time overview of your transport operations.</p>
+      </div>
+      <div class="flex gap-sm">
+        <Button variant="secondary" size="md">Export Report</Button>
+        <a href="/trips">
+          <Button variant="primary" size="md">Dispatch Trip</Button>
+        </a>
+      </div>
+    </header>
+
+    <!-- Mesh Gradient Hero Background Simulation -->
+    <div class="absolute top-[-100px] left-0 w-full h-[600px] opacity-[0.15] -z-10 pointer-events-none" style="background: radial-gradient(circle at 15% 50%, var(--color-violet), transparent 50%), radial-gradient(circle at 85% 30%, var(--color-highlight-pink), transparent 50%), radial-gradient(circle at 50% 80%, var(--color-cyan), transparent 50%); filter: blur(80px);"></div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-md">
+      <Card variant="soft" class="flex flex-col gap-xs min-h-[160px]">
+        <span class="text-caption-mono text-body uppercase">Fleet Utilization</span>
+        <div class="text-display-xl tracking-tighter text-ink mt-auto">{fleetUtilization}%</div>
+        <span class="text-body-sm text-body">{activeVehicles} active of {allVehicles.length} total</span>
+      </Card>
+      
+      <Card variant="soft" class="flex flex-col gap-xs min-h-[160px]">
+        <span class="text-caption-mono text-body uppercase">Vehicles Status</span>
+        <div class="flex flex-col items-start gap-xs mt-auto">
+           <Badge class="bg-success/10 text-success !px-sm">{availableVehicles} Available</Badge>
+           <Badge class="bg-warning/10 text-warning !px-sm">{maintenanceVehicles} In Shop</Badge>
+        </div>
+      </Card>
+
+      <Card variant="soft" class="flex flex-col gap-xs min-h-[160px]">
+        <span class="text-caption-mono text-body uppercase">Active Trips</span>
+        <div class="text-display-lg text-ink mt-auto">{activeTrips}</div>
+        <span class="text-body-sm text-body">{pendingTrips} Pending Drafts</span>
+      </Card>
+
+      <Card variant="soft" class="flex flex-col gap-xs min-h-[160px]">
+        <span class="text-caption-mono text-body uppercase">Drivers</span>
+        <div class="text-display-lg text-ink mt-auto">{driversOnDuty}</div>
+        <span class="text-body-sm text-body">Available or On Duty</span>
+      </Card>
+    </div>
+
+    <section class="space-y-md">
+      <h2 class="text-display-md text-ink">Recent Activity</h2>
+      <Card variant="marketing">
+        <div class="text-center py-xl text-body flex flex-col items-center gap-sm">
+          <p>No recent activity detected.</p>
+          <a href="/vehicles"><Button variant="secondary" size="md">Register Vehicle</Button></a>
+        </div>
+      </Card>
+    </section>
+  </div>
 </Layout>
