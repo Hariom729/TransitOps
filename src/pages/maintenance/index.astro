@@ -17,16 +17,23 @@ if (Astro.request.method === 'POST') {
 
   if (action === 'create') {
     const vehicleId = formData.get('vehicleId') as string;
+    const dateInput = formData.get('date') as string;
+    const statusInput = formData.get('status') as "Active" | "Closed";
+
     await db.insert(maintenanceLogs).values({
       id: crypto.randomUUID(),
       vehicleId,
       description: formData.get('description') as string,
       cost: Number(formData.get('cost')),
-      date: new Date().toISOString(),
-      status: 'Active',
+      date: dateInput ? new Date(dateInput).toISOString() : new Date().toISOString(),
+      status: statusInput,
     });
-    // Set vehicle to 'In Shop'
-    await db.update(vehicles).set({ status: 'In Shop' }).where(eq(vehicles.id, vehicleId));
+    // Set vehicle status based on log status
+    if (statusInput === 'Active') {
+      await db.update(vehicles).set({ status: 'In Shop' }).where(eq(vehicles.id, vehicleId));
+    } else {
+      await db.update(vehicles).set({ status: 'Available' }).where(eq(vehicles.id, vehicleId));
+    }
   } else if (action === 'close') {
     const logId = formData.get('id') as string;
     const log = db.select().from(maintenanceLogs).where(eq(maintenanceLogs.id, logId)).get();
@@ -51,42 +58,6 @@ const availableVehicles = allVehicles.filter(v => v.status === 'Available');
     </header>
 
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-lg">
-      <div class="lg:col-span-2 space-y-md">
-        {allLogs.length === 0 ? (
-          <Card variant="marketing">
-            <p class="text-body text-center py-xl">No maintenance logs found. Record one below.</p>
-          </Card>
-        ) : (
-          <div class="flex flex-col gap-sm">
-            {allLogs.map(log => {
-               const v = allVehicles.find(v => v.id === log.vehicleId);
-               return (
-                <Card variant="soft" class="flex flex-col md:flex-row justify-between md:items-center px-lg py-md gap-md">
-                  <div>
-                    <div class="flex items-center gap-sm mb-xs">
-                      <span class="text-body-md-strong text-ink">{v?.registrationNumber}</span>
-                      <Badge class={log.status === 'Active' ? 'bg-warning/10 text-warning' : 'bg-success/10 text-success'}>{log.status}</Badge>
-                    </div>
-                    <div class="text-body-sm text-body">
-                      {log.description} • ₹{log.cost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})} • {new Date(log.date).toLocaleDateString()}
-                    </div>
-                  </div>
-                  <div class="flex gap-xs">
-                    {log.status === 'Active' && (
-                      <form method="post">
-                        <input type="hidden" name="action" value="close" />
-                        <input type="hidden" name="id" value={log.id} />
-                        <Button type="submit" variant="primary" size="sm">Mark Completed</Button>
-                      </form>
-                    )}
-                  </div>
-                </Card>
-               );
-            })}
-          </div>
-        )}
-      </div>
-
       <div>
         <Card variant="marketing" class="sticky top-24">
           <h2 class="text-display-md text-ink mb-md">Record Maintenance</h2>
@@ -96,19 +67,66 @@ const availableVehicles = allVehicles.filter(v => v.status === 'Available');
             <div class="flex flex-col gap-2">
               <label class="text-body-sm-strong text-ink">Vehicle</label>
               <select name="vehicleId" required class="h-10 px-sm bg-canvas text-ink border border-hairline rounded-sm text-body-sm focus-visible:outline-none focus-visible:border-ink">
+                <option value="" disabled selected>Select a vehicle...</option>
                 {availableVehicles.map(v => (
-                  <option value={v.id}>{v.registrationNumber}</option>
+                  <option value={v.id}>{v.nameModel} ({v.type})</option>
                 ))}
                 {availableVehicles.length === 0 && <option disabled>No vehicles available</option>}
               </select>
             </div>
             
-            <Input name="description" label="Description" placeholder="Oil change & tire rotation" required />
+            <Input name="description" label="Service Type" placeholder="Oil change & tire rotation" required />
             <Input type="number" step="0.01" name="cost" label="Total Cost (₹)" placeholder="15000" required />
+            <Input type="date" name="date" label="Date" required />
             
-            <Button type="submit" variant="primary" class="w-full mt-sm" disabled={availableVehicles.length === 0}>Save Log</Button>
+            <div class="flex flex-col gap-2">
+              <label class="text-body-sm-strong text-ink">Status</label>
+              <select name="status" required class="h-10 px-sm bg-canvas text-ink border border-hairline rounded-sm text-body-sm focus-visible:outline-none focus-visible:border-ink">
+                <option value="Active">Active (In Shop)</option>
+                <option value="Closed">Closed (Completed)</option>
+              </select>
+            </div>
+
+            <Button type="submit" variant="primary" class="w-full mt-sm bg-warning text-black hover:bg-warning/90 border-transparent" disabled={availableVehicles.length === 0}>Save</Button>
           </form>
         </Card>
+      </div>
+
+      <div class="lg:col-span-2 space-y-md">
+        <h2 class="text-display-md text-ink mb-md">Maintenance History</h2>
+        {allLogs.length === 0 ? (
+          <Card variant="marketing">
+            <p class="text-body text-center py-xl">No maintenance logs found. Record one below.</p>
+          </Card>
+        ) : (
+          <div class="bg-canvas border border-hairline rounded-lg overflow-x-auto">
+            <table class="w-full text-left border-collapse whitespace-nowrap">
+              <thead>
+                <tr class="bg-canvas-soft border-b border-hairline text-caption-mono text-body">
+                  <th class="px-md py-sm font-normal">Vehicle</th>
+                  <th class="px-md py-sm font-normal">Service Type</th>
+                  <th class="px-md py-sm font-normal">Cost</th>
+                  <th class="px-md py-sm font-normal">Status</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-hairline">
+                {allLogs.map(log => {
+                   const v = allVehicles.find(v => v.id === log.vehicleId);
+                   return (
+                    <tr class="hover:bg-canvas-soft/50 transition-colors">
+                      <td class="px-md py-sm text-body-sm-strong text-ink">{v ? `${v.nameModel} (${v.type})` : 'Unknown'}</td>
+                      <td class="px-md py-sm text-body-sm text-body">{log.description}</td>
+                      <td class="px-md py-sm text-body-sm text-body">₹{log.cost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                      <td class="px-md py-sm">
+                        <Badge class={log.status === 'Active' ? 'bg-warning/10 text-warning' : 'bg-success/10 text-success'}>{log.status === 'Active' ? 'In Shop' : 'Completed'}</Badge>
+                      </td>
+                    </tr>
+                   );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   </div>
