@@ -5,104 +5,179 @@ import Button from '../../components/ui/Button.astro';
 import Badge from '../../components/ui/Badge.astro';
 import Input from '../../components/ui/Input.astro';
 import { db } from '../../db';
-import { drivers } from '../../db/schema';
+import { drivers, trips } from '../../db/schema';
 import { eq } from 'drizzle-orm';
+
+let errorMsg = '';
 
 // Form Handling
 if (Astro.request.method === 'POST') {
   const formData = await Astro.request.formData();
   const action = formData.get('action');
 
+  try {
+
   if (action === 'create') {
-    await db.insert(drivers).values({
-      id: crypto.randomUUID(),
-      name: formData.get('name') as string,
-      licenseNumber: formData.get('licenseNumber') as string,
-      licenseCategory: formData.get('licenseCategory') as string,
-      licenseExpiryDate: formData.get('licenseExpiryDate') as string,
-      contactNumber: formData.get('contactNumber') as string,
-      status: 'Available',
-      safetyScore: 100,
-    });
-  } else if (action === 'delete') {
-    const id = formData.get('id') as string;
-    await db.delete(drivers).where(eq(drivers.id, id));
-  } else if (action === 'suspend') {
-    const id = formData.get('id') as string;
-    await db.update(drivers).set({ status: 'Suspended' }).where(eq(drivers.id, id));
+      const expiryRaw = formData.get('licenseExpiryDate') as string;
+      const parts = expiryRaw.split('/');
+      const dbExpiry = parts.length === 2 ? `${parts[1]}-${parts[0]}` : expiryRaw;
+
+      await db.insert(drivers).values({
+        id: crypto.randomUUID(),
+        name: formData.get('name') as string,
+        licenseNumber: formData.get('licenseNumber') as string,
+        licenseCategory: formData.get('licenseCategory') as string,
+        licenseExpiryDate: dbExpiry,
+        contactNumber: formData.get('contactNumber') as string,
+        status: 'Available',
+        safetyScore: 100,
+      });
+    } else if (action === 'delete') {
+      const id = formData.get('id') as string;
+      await db.delete(drivers).where(eq(drivers.id, id));
+    } else if (action === 'suspend') {
+      const id = formData.get('id') as string;
+      await db.update(drivers).set({ status: 'Suspended' }).where(eq(drivers.id, id));
+    }
+  } catch (e: any) {
+    if (e.message?.includes('UNIQUE constraint failed')) {
+      errorMsg = 'A driver with this license number already exists.';
+    } else {
+      errorMsg = 'An error occurred while saving the driver.';
+    }
   }
 }
 
-const allDrivers = db.select().from(drivers).all();
+const search = Astro.url.searchParams.get('search')?.toLowerCase() || '';
+const allDrivers = db.select().from(drivers).all().filter(d => {
+  if (!search) return true;
+  return d.name.toLowerCase().includes(search) || d.licenseNumber.toLowerCase().includes(search);
+});
+
+const completedTripsCounts = db.select().from(trips).where(eq(trips.status, 'Completed')).all().reduce((acc, trip) => {
+  acc[trip.driverId] = (acc[trip.driverId] || 0) + 1;
+  return acc;
+}, {} as Record<string, number>);
 ---
 
 <Layout title="Drivers">
   <div class="p-lg md:p-xl lg:p-4xl space-y-xl">
-    <header class="flex justify-between items-end">
+    <header class="flex flex-col md:flex-row justify-between items-start md:items-end gap-md">
       <div>
         <h1 class="text-display-lg text-ink">Driver Management</h1>
         <p class="text-body-lg text-body">Manage driver profiles and compliance.</p>
       </div>
+      <div class="flex gap-sm w-full md:w-auto">
+        <form method="get" class="flex gap-2 w-full md:w-auto">
+          <input type="text" name="search" value={search} placeholder="Search drivers..." class="h-10 px-sm bg-canvas text-ink border border-hairline rounded-sm text-body-sm focus-visible:outline-none focus-visible:border-ink w-full md:w-48" />
+          <Button type="submit" variant="secondary" size="md" class="h-10">Search</Button>
+        </form>
+        <Button id="openModalBtn" variant="primary" size="md" class="h-10 flex items-center gap-2">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+          Add Driver
+        </Button>
+      </div>
     </header>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-lg">
-      <div class="lg:col-span-2 space-y-md">
-        {allDrivers.length === 0 ? (
-          <Card variant="marketing">
-            <p class="text-body text-center py-xl">No drivers found. Register one below.</p>
-          </Card>
-        ) : (
-          <div class="flex flex-col gap-sm">
-            {allDrivers.map(d => (
-              <Card variant="soft" class="flex justify-between items-center px-lg py-md">
-                <div>
-                  <div class="flex items-center gap-sm mb-xs">
-                    <span class="text-body-md-strong text-ink">{d.name}</span>
-                    <Badge class={d.status === 'Available' ? 'bg-success/10 text-success' : d.status === 'Suspended' ? 'bg-error/10 text-error' : d.status === 'Off Duty' ? 'bg-mute/10 text-mute' : 'bg-primary/10 text-primary'}>{d.status}</Badge>
-                  </div>
-                  <div class="text-body-sm text-body flex items-center gap-xs">
-                    <span>License: {d.licenseNumber} ({d.licenseCategory})</span>
-                    <span>•</span>
-                    <span class={new Date(d.licenseExpiryDate) < new Date() ? 'text-error font-medium' : ''}>Exp: {d.licenseExpiryDate}</span>
-                    <span>•</span>
-                    <span>Score: {d.safetyScore}</span>
-                  </div>
-                </div>
-                <div class="flex gap-xs">
-                  <form method="post" class="flex gap-xs">
+    {errorMsg && (
+      <div class="bg-error/10 text-error px-md py-sm rounded-md border border-error/20 flex items-center justify-between">
+        <span class="text-body-sm-strong">{errorMsg}</span>
+        <button onclick="this.parentElement.remove()" class="text-error hover:text-error-deep">&times;</button>
+      </div>
+    )}
+
+    <Card variant="marketing" class="overflow-x-auto p-0">
+      <table class="w-full text-left border-collapse">
+        <thead>
+          <tr class="border-b border-hairline bg-canvas-soft text-body-sm-strong text-ink">
+            <th class="p-md font-medium">Driver</th>
+            <th class="p-md font-medium">License No.</th>
+            <th class="p-md font-medium">Category</th>
+            <th class="p-md font-medium">Expiry</th>
+            <th class="p-md font-medium">Contact</th>
+            <th class="p-md font-medium">Trip Compl.</th>
+            <th class="p-md font-medium">Safety</th>
+            <th class="p-md font-medium">Status</th>
+            <th class="p-md font-medium text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-hairline">
+          {allDrivers.map(d => {
+            const dateParts = d.licenseExpiryDate.split('-');
+            const formattedExpiry = dateParts.length >= 2 ? `${dateParts[1]}/${dateParts[0]}` : d.licenseExpiryDate;
+            const isExpired = new Date(d.licenseExpiryDate) < new Date();
+            const displayExpiry = isExpired ? `${formattedExpiry} (Expired)` : formattedExpiry;
+            
+            return (
+              <tr class="hover:bg-canvas-soft transition-colors">
+                <td class="p-md text-body-md-strong text-ink">{d.name}</td>
+                <td class="p-md text-body-sm text-body">{d.licenseNumber}</td>
+                <td class="p-md text-body-sm text-body">{d.licenseCategory}</td>
+                <td class={`p-md text-body-sm ${isExpired ? 'text-error font-medium' : 'text-body'}`}>{displayExpiry}</td>
+                <td class="p-md text-body-sm text-body">{d.contactNumber}</td>
+                <td class="p-md text-body-sm text-body">{completedTripsCounts[d.id] || 0}</td>
+                <td class="p-md text-body-sm text-body">{d.safetyScore}</td>
+                <td class="p-md">
+                   <Badge class={d.status === 'Available' ? 'bg-success/10 text-success' : d.status === 'Suspended' ? 'bg-error/10 text-error' : d.status === 'Off Duty' ? 'bg-mute/10 text-mute' : 'bg-link/10 text-link'}>{d.status}</Badge>
+                </td>
+                <td class="p-md text-right">
+                  <form method="post" class="inline-flex gap-xs justify-end">
                     <input type="hidden" name="id" value={d.id} />
                     {d.status !== 'Suspended' && (
-                      <Button type="submit" name="action" value="suspend" variant="secondary" size="sm">Suspend</Button>
+                      <button type="submit" name="action" value="suspend" class="text-warning hover:text-warning-deep text-body-sm font-medium mr-2">Suspend</button>
                     )}
-                    <Button type="submit" name="action" value="delete" variant="secondary" size="sm" class="text-error hover:text-error hover:bg-error-soft border-error-soft">Remove</Button>
+                    <button type="submit" name="action" value="delete" class="text-error hover:text-error-deep text-body-sm font-medium">Remove</button>
                   </form>
-                </div>
-              </Card>
-            ))}
-          </div>
-        )}
-      </div>
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+      {allDrivers.length === 0 && <p class="text-center py-xl text-body">No drivers found.</p>}
+    </Card>
 
-      <div>
-        <Card variant="marketing" class="sticky top-24">
-          <h2 class="text-display-md text-ink mb-md">Register Driver</h2>
-          <form method="post" class="space-y-md">
-            <input type="hidden" name="action" value="create" />
-            <Input name="name" label="Full Name" placeholder="Alex Chen" required />
-            <Input name="licenseNumber" label="License Number" placeholder="DL-123456" required />
-            <div class="flex flex-col gap-2">
-              <label class="text-body-sm-strong text-ink">License Category</label>
-              <select name="licenseCategory" class="h-10 px-sm bg-canvas text-ink border border-hairline rounded-sm text-body-sm focus-visible:outline-none focus-visible:border-ink">
-                <option value="Commercial">Commercial (Class A/B)</option>
-                <option value="Standard">Standard (Class C)</option>
-              </select>
-            </div>
-            <Input type="date" name="licenseExpiryDate" label="Expiry Date" required />
-            <Input type="tel" name="contactNumber" label="Contact Number" placeholder="+1 555 0100" required />
-            <Button type="submit" variant="primary" class="w-full mt-sm">Register Driver</Button>
-          </form>
-        </Card>
-      </div>
-    </div>
+    <dialog id="addDriverModal" class="p-0 bg-transparent backdrop:bg-primary/20 backdrop:backdrop-blur-sm rounded-lg shadow-level-4">
+      <Card variant="marketing" class="w-[400px] m-auto max-w-[90vw]">
+        <div class="flex justify-between items-center mb-md">
+          <h2 class="text-display-md text-ink">Register Driver</h2>
+          <button id="closeModalBtn" type="button" class="text-body hover:text-ink text-display-md leading-none">&times;</button>
+        </div>
+        <form method="post" class="space-y-md">
+          <input type="hidden" name="action" value="create" />
+          <Input name="name" label="Full Name" placeholder="Alex Chen" required />
+          <Input name="licenseNumber" label="License Number" placeholder="DL-123456" required />
+          <div class="flex flex-col gap-2">
+            <label class="text-body-sm-strong text-ink">License Category</label>
+            <select name="licenseCategory" class="h-10 px-sm bg-canvas text-ink border border-hairline rounded-sm text-body-sm focus-visible:outline-none focus-visible:border-ink">
+              <option value="LMV">LMV</option>
+              <option value="HMV">HMV</option>
+            </select>
+          </div>
+          <Input type="text" name="licenseExpiryDate" label="Expiry (MM/YYYY)" placeholder="10/2026" pattern="(0[1-9]|1[0-2])\/[0-9]{4}" title="Format: MM/YYYY" required />
+          <Input type="tel" name="contactNumber" label="Contact Number" placeholder="9876543210" pattern="[0-9]{10}" title="Must be exactly 10 digits" required />
+          <Button type="submit" variant="primary" class="w-full mt-sm">Register Driver</Button>
+        </form>
+      </Card>
+    </dialog>
   </div>
+
+  <script>
+    const dialog = document.getElementById('addDriverModal') as HTMLDialogElement;
+    document.getElementById('openModalBtn')?.addEventListener('click', () => dialog.showModal());
+    document.getElementById('closeModalBtn')?.addEventListener('click', () => dialog.close());
+    
+    // Close when clicking outside
+    dialog?.addEventListener('click', (e) => {
+      const dialogDimensions = dialog.getBoundingClientRect()
+      if (
+        e.clientX < dialogDimensions.left ||
+        e.clientX > dialogDimensions.right ||
+        e.clientY < dialogDimensions.top ||
+        e.clientY > dialogDimensions.bottom
+      ) {
+        dialog.close()
+      }
+    })
+  </script>
 </Layout>
