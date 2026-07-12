@@ -47,10 +47,13 @@ const allExpenses = db.select().from(expenses).all();
   <div class="p-lg md:p-xl lg:p-4xl space-y-xl">
     <header class="flex justify-between items-end">
       <div>
-        <h1 class="text-display-lg text-ink">Finance & Analytics</h1>
+        <h1 class="text-display-lg text-ink">Fuel & Expense Tracking</h1>
         <p class="text-body-lg text-body">Track expenses, fuel logs, and fleet ROI.</p>
       </div>
       <div class="flex gap-sm">
+        <a href="/finance/reports">
+          <Button variant="secondary" size="md">View Reports</Button>
+        </a>
         <a href="/api/export-analytics.csv" download="transitops-analytics.csv">
           <Button variant="secondary" size="md">Download CSV</Button>
         </a>

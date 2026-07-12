@@ -1,0 +1,139 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Card from '../../components/ui/Card.astro';
+import Button from '../../components/ui/Button.astro';
+import { db } from '../../db';
+import { fuelLogs, maintenanceLogs, vehicles, trips, expenses } from '../../db/schema';
+
+const allFuelLogs = db.select().from(fuelLogs).all();
+const allMaintenanceLogs = db.select().from(maintenanceLogs).all();
+const allVehicles = db.select().from(vehicles).all();
+const allTrips = db.select().from(trips).all();
+const allExpenses = db.select().from(expenses).all();
+
+// Calculations
+const totalFuelCost = allFuelLogs.reduce((sum, log) => sum + log.cost, 0);
+const totalMaintenanceCost = allMaintenanceLogs.reduce((sum, log) => sum + log.cost, 0);
+const totalOtherExpenses = allExpenses.reduce((sum, e) => sum + e.amount, 0);
+
+const totalOperatingCost = totalFuelCost + totalMaintenanceCost + totalOtherExpenses;
+const totalFuelLiters = allFuelLogs.reduce((sum, log) => sum + log.liters, 0);
+const totalDistance = allTrips.reduce((sum, t) => sum + t.plannedDistance, 0);
+
+const fuelEfficiency = totalFuelLiters > 0 ? (totalDistance / totalFuelLiters).toFixed(1) : "0.0";
+
+const activeVehicles = allVehicles.filter(v => v.status === 'On Trip').length;
+const fleetUtil = allVehicles.length > 0 ? Math.round((activeVehicles / allVehicles.length) * 100) : 0;
+
+// Mock Revenue calculation for demonstration (₹50 per km)
+const totalRevenue = totalDistance * 50;
+const totalAcquisition = allVehicles.reduce((sum, v) => sum + v.acquisitionCost, 0);
+const vehicleROI = totalAcquisition > 0 ? (((totalRevenue - totalOperatingCost) / totalAcquisition) * 100).toFixed(1) : "0.0";
+
+// Vehicle Efficiency for Top Costliest Vehicles
+const vehicleEfficiency = allVehicles.map(v => {
+  const vFuelCost = allFuelLogs.filter(log => log.vehicleId === v.id).reduce((sum, log) => sum + log.cost, 0);
+  const vMaintCost = allMaintenanceLogs.filter(log => log.vehicleId === v.id).reduce((sum, log) => sum + log.cost, 0);
+  const vOtherCost = allExpenses.filter(e => e.vehicleId === v.id).reduce((sum, e) => sum + e.amount, 0);
+  const vTotal = vFuelCost + vMaintCost + vOtherCost;
+  return { ...v, totalCost: vTotal, fuelCost: vFuelCost, maintCost: vMaintCost, otherCost: vOtherCost };
+}).sort((a, b) => b.totalCost - a.totalCost);
+
+const topVehicles = vehicleEfficiency.slice(0, 3);
+const maxVehicleCost = topVehicles.length > 0 && topVehicles[0].totalCost > 0 ? topVehicles[0].totalCost : 1;
+
+// Mock Monthly Revenue data for the bar chart
+const monthlyRevenue = [18000, 22000, 21000, 30000, 42000, 38000];
+const maxRevenue = Math.max(...monthlyRevenue);
+const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
+
+const vehicleColors = ['#FF9B9B', '#D47A15', '#6A9CDB'];
+
+---
+
+<Layout title="Reports & Analytics">
+  <div class="p-lg md:p-xl lg:p-4xl space-y-xl">
+    <header class="flex justify-between items-end">
+      <div>
+        <h1 class="text-display-lg text-ink">Reports & Analytics</h1>
+        <p class="text-body-lg text-body">High-level financial insights and efficiency metrics.</p>
+      </div>
+      <div class="flex gap-sm">
+        <a href="/finance">
+          <Button variant="secondary" size="md">&larr; Back to Expenses</Button>
+        </a>
+      </div>
+    </header>
+
+    <div class="flex flex-col lg:flex-row gap-md w-full">
+      <Card variant="soft" class="flex-1 border-hairline p-lg flex flex-col gap-2 relative overflow-hidden">
+        <div class="absolute left-0 top-0 bottom-0 w-1" style="background-color: #6A9CDB"></div>
+        <div class="text-caption text-mute uppercase tracking-widest font-mono">Fuel Efficiency</div>
+        <div class="text-display-lg text-ink">{fuelEfficiency} <span class="text-body-lg">km/l</span></div>
+      </Card>
+      
+      <Card variant="soft" class="flex-1 border-hairline p-lg flex flex-col gap-2 relative overflow-hidden">
+        <div class="absolute left-0 top-0 bottom-0 w-1" style="background-color: #10b981"></div>
+        <div class="text-caption text-mute uppercase tracking-widest font-mono">Fleet Utilization</div>
+        <div class="text-display-lg text-ink">{fleetUtil}%</div>
+      </Card>
+
+      <Card variant="soft" class="flex-1 border-hairline p-lg flex flex-col gap-2 relative overflow-hidden">
+        <div class="absolute left-0 top-0 bottom-0 w-1" style="background-color: #D47A15"></div>
+        <div class="text-caption text-mute uppercase tracking-widest font-mono">Operational Cost</div>
+        <div class="text-display-lg text-ink">₹{totalOperatingCost.toLocaleString()}</div>
+      </Card>
+
+      <Card variant="soft" class="flex-1 border-hairline p-lg flex flex-col gap-2 relative overflow-hidden">
+        <div class="absolute left-0 top-0 bottom-0 w-1" style="background-color: #10b981"></div>
+        <div class="text-caption text-mute uppercase tracking-widest font-mono">Vehicle ROI</div>
+        <div class="text-display-lg text-ink">{vehicleROI}%</div>
+      </Card>
+    </div>
+    
+    <div class="text-caption text-mute font-mono">
+      ROI = (Revenue - (Maintenance + Fuel + Expenses)) / Acquisition Cost
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-2xl mt-xl">
+      <div class="space-y-lg">
+        <h2 class="text-body-sm-strong uppercase tracking-widest text-body mb-lg font-mono">Monthly Revenue</h2>
+        <div class="h-64 flex items-end justify-between gap-2 border-b border-hairline pb-2">
+          {monthlyRevenue.map((val, i) => (
+            <div class="w-full flex flex-col items-center justify-end h-full gap-2 group">
+              <div class="w-full hover:opacity-100 opacity-80 transition-all rounded-t-sm relative" style={`height: ${(val / maxRevenue) * 100}%; background-color: #6A9CDB;`}>
+                <div class="opacity-0 group-hover:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-ink text-canvas text-xs px-2 py-1 rounded whitespace-nowrap transition-opacity">
+                  ₹{val.toLocaleString()}
+                </div>
+              </div>
+              <span class="text-caption-mono text-mute">{months[i]}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div class="space-y-lg">
+        <h2 class="text-body-sm-strong uppercase tracking-widest text-body mb-lg font-mono">Top Costliest Vehicles</h2>
+        <div class="flex flex-col gap-lg">
+          {topVehicles.length === 0 ? (
+             <div class="text-body text-center py-xl">No costs recorded yet.</div>
+          ) : (
+            topVehicles.map((v, index) => {
+              const widthPct = Math.max((v.totalCost / maxVehicleCost) * 100, 5); // min 5% for visibility
+              const barColor = vehicleColors[index % vehicleColors.length];
+              return (
+                <div class="flex items-center gap-md">
+                  <div class="w-24 text-caption-mono text-body truncate" title={v.nameModel}>{v.nameModel.toUpperCase()}</div>
+                  <div class="flex-1 h-6 bg-canvas rounded overflow-hidden">
+                    <div class="h-full transition-all duration-1000" style={`width: ${widthPct}%; background-color: ${barColor}`}></div>
+                  </div>
+                  <div class="w-24 text-right text-caption-mono text-ink">₹{v.totalCost.toLocaleString()}</div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  </div>
+</Layout>
